@@ -1,0 +1,5 @@
+[build]
+target = "index.html"
+dist = "dist"
+# Relativa sökvägar, så att mappen dist/ fungerar var den än läggs (t.ex. GitHub Pages).
+public_url = "./"
