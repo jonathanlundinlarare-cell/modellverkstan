@@ -42,6 +42,16 @@ cargo build --release
 Programmet hamnar i `target/release/modellverkstan.exe`. Det är en enda fil som inte behöver installeras –
 kopiera den till eleverna och dubbelklicka.
 
+## Ämnen
+
+Exemplen är ordnade efter ämne (Teknik, Samhällskunskap) med flikar på startsidan.
+Programversionen visar alla ämnen. Webbversionen visar bara de ämnen som är markerade som klara
+i `Subject::on_web` i `src/examples/mod.rs` – just nu bara Teknik.
+
+- **Förhandsgranska** alla ämnen på webben: `trunk serve --features alla-amnen`
+- **Publicera** ett ämne på webben: ändra dess rad i `on_web` till `true`, committa och pusha.
+- **Nytt ämne:** lägg till det i `Subject`, skriv modellerna i en ny fil i `src/examples/` och lista dem i `all()`.
+
 ## Formler i korthet
 
 Skriv namnen på andra delar precis som de heter, t.ex. `Vatten i badkaret * Avloppets storlek`.

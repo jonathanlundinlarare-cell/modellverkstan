@@ -2,7 +2,7 @@
 
 use crate::model::{FeedbackLoop, Model, ModelKind, NodeKind};
 use crate::sim::{self, Compiled, SimResult};
-use crate::{canvas, help, io, panels, start, theme};
+use crate::{canvas, examples, help, io, panels, start, theme};
 use egui::{Context, Key, KeyboardShortcut, Modifiers, Vec2};
 
 const STORAGE_KEY: &str = "senaste_modell";
@@ -75,6 +75,8 @@ pub struct App {
     pub highlight_loop: Option<usize>,
 
     pub show_help: bool,
+    /// Ämnet som visas bland exemplen på startsidan (None = alla).
+    pub subject_filter: Option<examples::Subject>,
     pub focus_name: bool,
     pub rename_origin: Option<(u32, String)>,
     toast: Option<(String, f64)>,
@@ -112,6 +114,7 @@ impl App {
             result_tab: ResultTab::Graph,
             highlight_loop: None,
             show_help: false,
+            subject_filter: None,
             focus_name: false,
             rename_origin: None,
             toast: None,

@@ -5,6 +5,10 @@ edition = "2021"
 description = "Bygg och testa enkla systemmodeller – orsaksdiagram och lager/flöden för teknikundervisning."
 license = "MIT"
 
+[features]
+# Visa alla ämnen även i webbversionen, t.ex. `trunk serve --features alla-amnen`.
+alla-amnen = []
+
 [dependencies]
 eframe = { version = "0.31", features = ["persistence"] }
 egui = "0.31"

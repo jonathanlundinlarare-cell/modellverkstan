@@ -1,7 +1,7 @@
 //! Startsidan med nya modeller och exempel.
 
 use crate::app::App;
-use crate::examples;
+use crate::examples::{self, Subject};
 use crate::model::{Model, ModelKind};
 use crate::theme::{self, cr};
 use egui::{Color32, Context, Margin, RichText, Sense, Stroke, StrokeKind, Ui};
@@ -52,6 +52,20 @@ fn card_grid(app: &mut App, ui: &mut Ui, width: f32, cols: usize, cards: Vec<Car
             }
         });
         ui.add_space(4.0);
+    }
+}
+
+/// En flik för ett ämne: tydligt markerad när den är vald.
+fn subject_tab(ui: &mut Ui, current: &mut Option<Subject>, value: Option<Subject>, label: &str) {
+    let selected = *current == value;
+    let text = RichText::new(label).size(16.0).color(if selected { Color32::WHITE } else { theme::INK });
+    let button = egui::Button::new(text)
+        .fill(if selected { theme::ACCENT } else { Color32::WHITE })
+        .stroke(Stroke::new(1.0_f32, if selected { theme::ACCENT } else { Color32::from_rgb(214, 212, 204) }))
+        .corner_radius(cr(16.0))
+        .min_size(egui::vec2(0.0, 32.0));
+    if ui.add(button).on_hover_cursor(egui::CursorIcon::PointingHand).clicked() {
+        *current = value;
     }
 }
 
@@ -122,8 +136,19 @@ fn content(app: &mut App, ui: &mut Ui, width: f32) {
 
     ui.add_space(20.0);
     ui.label(RichText::new("Exempel att utforska").size(20.0).strong());
+    let subjects = examples::subjects();
+    if subjects.len() > 1 {
+        ui.horizontal_wrapped(|ui| {
+            subject_tab(ui, &mut app.subject_filter, None, "Alla ämnen");
+            for s in subjects {
+                subject_tab(ui, &mut app.subject_filter, Some(s), s.label());
+            }
+        });
+        ui.add_space(6.0);
+    }
     let examples = examples::all()
         .into_iter()
+        .filter(|ex| app.subject_filter.is_none_or(|s| s == ex.subject))
         .map(|ex| Card { badge: badge(ex.kind), title: ex.title.into(), body: ex.summary.into(), model: (ex.build)() })
         .collect();
     card_grid(app, ui, width, cols, examples);

@@ -286,6 +286,65 @@ mod tests {
     }
 
     #[test]
+    fn savings_without_interest_equals_deposits() {
+        let mut m = examples::savings();
+        let money = id(&m, "Pengar på kontot");
+        let own = id(&m, "Egna insättningar totalt");
+        set(&mut m, "Årsränta", 0.0);
+        let r = run(&m);
+        let end = *r.series[&money].last().unwrap();
+        assert!((end - 500.0 * 12.0 * 40.0).abs() < 1.0, "{end}");
+
+        // Med ränta blir det mer än man har satt in, och skillnaden växer över tid.
+        set(&mut m, "Årsränta", 5.0);
+        let r = run(&m);
+        let (money, own) = (&r.series[&money], &r.series[&own]);
+        let gap = |i: usize| money[i] - own[i];
+        let half = money.len() / 2;
+        assert!(gap(money.len() - 1) > 2.0 * gap(half));
+        assert!(money.last().unwrap() > &(2.0 * own.last().unwrap()));
+    }
+
+    #[test]
+    fn budget_buffer_grows_then_shrinks_when_unemployed() {
+        let m = examples::household_budget();
+        let buffer = id(&m, "Sparbuffert");
+        let r = run(&m);
+        let at = |month: f64| r.value_at(buffer, month).unwrap();
+        assert!((at(0.0) - 20_000.0).abs() < 1.0);
+        assert!((at(12.0) - 56_000.0).abs() < 200.0, "{}", at(12.0));
+        assert!(at(24.0) < at(12.0));
+    }
+
+    #[test]
+    fn loan_is_paid_off_unless_payment_is_below_interest() {
+        let mut m = examples::loan();
+        let debt = id(&m, "Skuld");
+        let r = run(&m);
+        assert!(*r.series[&debt].last().unwrap() < 10.0);
+
+        // SMS-lån: 39 % ränta och 300 kr/månad räcker inte ens till räntan.
+        set(&mut m, "Årsränta", 39.0);
+        set(&mut m, "Månadsbetalning", 300.0);
+        let r = run(&m);
+        assert!(*r.series[&debt].last().unwrap() > 10_000.0);
+    }
+
+    #[test]
+    fn economic_cycle_has_reinforcing_and_balancing_loops() {
+        let loops = examples::economic_cycle().find_loops();
+        assert_eq!(loops.len(), 4);
+        assert_eq!(loops.iter().filter(|l| l.reinforcing).count(), 2);
+    }
+
+    #[test]
+    fn every_subject_has_examples() {
+        for s in examples::Subject::ALL {
+            assert!(examples::all().iter().any(|e| e.subject == s), "{s:?}");
+        }
+    }
+
+    #[test]
     fn examples_compile() {
         for ex in examples::all() {
             let m = (ex.build)();
