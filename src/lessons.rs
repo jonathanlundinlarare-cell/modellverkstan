@@ -173,7 +173,7 @@ fn cld_food_solve(m: &mut Model) {
 fn rabbits_cld() -> Lesson {
     Lesson {
         title: "1. Kaninerna som orsaksdiagram",
-        summary: "Lär dig variabler, pilar med + och −, och hitta förstärkande och balanserande loopar. Sex korta steg.",
+        summary: "Lär dig variabler, pilar med + och −, och hitta förstärkande och balanserande loopar.",
         kind: ModelKind::Cld,
         start: || {
             let mut m = Model::new(ModelKind::Cld);
@@ -209,7 +209,7 @@ fn rabbits_cld() -> Lesson {
                 cld_births_done,
                 cld_births_solve,
                 "Titta – programmet hittade en loop och märkte den R1! R betyder FÖRSTÄRKANDE: \
-                 fler kaniner → fler födslar → ännu fler kaniner. En förändring växer sig större och större. \
+                 fler kaniner ➡ fler födslar ➡ ännu fler kaniner. En förändring växer sig större och större. \
                  Det är därför kaniner kan bli väldigt många väldigt fort.",
             ),
             task(
@@ -221,7 +221,7 @@ fn rabbits_cld() -> Lesson {
                 Tool::Link,
                 cld_deaths_done,
                 cld_deaths_solve,
-                "Nu finns loop B1. B betyder BALANSERANDE: fler kaniner → fler dödsfall → färre kaniner. \
+                "Nu finns loop B1. B betyder BALANSERANDE: fler kaniner ➡ fler dödsfall ➡ färre kaniner. \
                  Loopen motverkar förändringen och försöker hålla antalet stabilt.",
             ),
             task(
@@ -233,7 +233,7 @@ fn rabbits_cld() -> Lesson {
                 Tool::Link,
                 cld_food_done,
                 cld_food_solve,
-                "En balanserande loop till, B2: fler kaniner → mindre mat per kanin → färre födslar → färre kaniner. \
+                "En balanserande loop till, B2: fler kaniner ➡ mindre mat per kanin ➡ färre födslar ➡ färre kaniner. \
                  Håll musen över looparna i listan till höger för att se var de går.",
             ),
             info(
@@ -433,7 +433,7 @@ fn sfd_limit_solve(m: &mut Model) {
 fn rabbits_sfd() -> Lesson {
     Lesson {
         title: "2. Kaninerna med lager och flöden",
-        summary: "Bygg en modell som går att köra. Lär dig lager, flöden, konstanter och se vilken loop som vinner. Nio steg.",
+        summary: "Bygg en modell som går att köra. Lär dig lager, flöden, konstanter och se vilken loop som vinner.",
         kind: ModelKind::Sfd,
         start: || {
             let mut m = Model::new(ModelKind::Sfd);
@@ -455,7 +455,7 @@ fn rabbits_sfd() -> Lesson {
                 "Ett LAGER är något som finns i en viss mängd just nu och som kan öka eller minska: \
                  vatten i ett badkar, pengar på ett konto – eller kaniner på en ö. \
                  Om du kunde frysa tiden skulle du kunna räkna lagret.",
-                "Välj Lager i verktygslådan och klicka på ytan. Döp lagret till Kaniner och skriv 10 som startvärde.",
+                "Välj Lager i verktygsraden till vänster och klicka på ytan. Döp lagret till Kaniner och skriv 10 som startvärde.",
                 Tool::Place(NodeKind::Stock),
                 sfd_stock_done,
                 sfd_stock_solve,
@@ -481,7 +481,7 @@ fn rabbits_sfd() -> Lesson {
                 Tool::Place(NodeKind::Constant),
                 sfd_rate_done,
                 sfd_rate_solve,
-                "Konstanten har fått ett reglage under \"Reglage\" till höger.",
+                "Konstanten har fått ett reglage under Reglage, bredvid grafen. Prova att dra i det!",
             ),
             task(
                 "Koppla ihop med en formel",
@@ -491,7 +491,7 @@ fn rabbits_sfd() -> Lesson {
                 Tool::Select,
                 sfd_births_done,
                 sfd_births_solve,
-                "Titta på grafen! Kurvan blir brantare och brantare: fler kaniner → fler födslar → ännu fler kaniner. \
+                "Titta på grafen! Kurvan blir brantare och brantare: fler kaniner ➡ fler födslar ➡ ännu fler kaniner. \
                  Det är den FÖRSTÄRKANDE loopen (R) från orsaksdiagrammet. Den grå pilen från Kaniner till Födslar visar den. \
                  Prova att dra i reglaget för Födelsetal.",
             ),
@@ -503,7 +503,7 @@ fn rabbits_sfd() -> Lesson {
                 Tool::Flow,
                 sfd_deaths_done,
                 sfd_deaths_solve,
-                "Fler kaniner → fler dödsfall → färre kaniner. Det är en BALANSERANDE loop (B). \
+                "Fler kaniner ➡ fler dödsfall ➡ färre kaniner. Det är en BALANSERANDE loop (B). \
                  Prova: vad händer om dödstalet är större än födelsetalet? Och om de är lika stora?",
             ),
             task(
@@ -526,8 +526,8 @@ fn rabbits_sfd() -> Lesson {
                 sfd_limit_done,
                 sfd_limit_solve,
                 "Nu planar kurvan ut – en S-kurva! I början vinner den förstärkande loopen. \
-                 När maten inte räcker tar en ny balanserande loop över: fler kaniner → mindre mat per kanin \
-                 → färre födslar → färre kaniner.",
+                 När maten inte räcker tar en ny balanserande loop över: fler kaniner ➡ mindre mat per kanin \
+                 ➡ färre födslar ➡ färre kaniner.",
             ),
             info(
                 "Experimentera!",

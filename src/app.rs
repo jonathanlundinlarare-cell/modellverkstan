@@ -2,7 +2,7 @@
 
 use crate::model::{FeedbackLoop, Model, ModelKind, NodeKind};
 use crate::sim::{self, Compiled, SimResult};
-use crate::{canvas, examples, export, help, io, lessons, panels, start, theme};
+use crate::{canvas, examples, export, help, io, lessons, panels, start, theme, ui_kit};
 use egui::{Context, Key, KeyboardShortcut, Modifiers, Vec2};
 use std::collections::HashMap;
 
@@ -323,57 +323,82 @@ impl App {
 
     fn top_bar(&mut self, ctx: &Context) {
         egui::TopBottomPanel::top("topbar")
-            .frame(egui::Frame::default().fill(egui::Color32::WHITE).inner_margin(egui::Margin::symmetric(12, 8)))
+            .exact_height(56.0)
+            .frame(
+                egui::Frame::default()
+                    .fill(theme::SURFACE)
+                    .inner_margin(egui::Margin::symmetric(16, 0))
+                    .stroke(egui::Stroke::new(1.0_f32, theme::LINE)),
+            )
             .show(ctx, |ui| {
-                ui.horizontal(|ui| {
-                    let logo = ui.add(
-                        egui::Label::new(egui::RichText::new("Modellverkstan").size(20.0).strong().color(theme::ACCENT))
-                            .sense(egui::Sense::click()),
-                    );
-                    if logo.on_hover_text("Till startsidan").clicked() {
+                ui.horizontal_centered(|ui| {
+                    ui.spacing_mut().item_spacing.x = 6.0;
+                    let (rect, logo) = ui.allocate_exact_size(egui::vec2(30.0, 30.0), egui::Sense::click());
+                    ui_kit::logo(ui.painter(), rect);
+                    let name = ui.add(egui::Label::new(theme::title("Modellverkstan", 17.0)).sense(egui::Sense::click()));
+                    if logo.union(name).on_hover_text("Till startsidan").on_hover_cursor(egui::CursorIcon::PointingHand).clicked() {
                         self.screen = Screen::Start;
                     }
                     if self.screen == Screen::Editor {
-                        ui.separator();
-                        if ui.button("🏠 Start").clicked() {
-                            self.screen = Screen::Start;
-                        }
-                        if ui.button("📂 Öppna").on_hover_text("Ctrl+O").clicked() {
-                            self.open_file(ctx);
-                        }
-                        if ui.button("💾 Spara").on_hover_text("Ctrl+S").clicked() {
-                            self.save_file(ctx);
-                        }
-                        ui.separator();
-                        if ui.add_enabled(self.can_undo(), egui::Button::new("⟲ Ångra")).on_hover_text("Ctrl+Z").clicked() {
-                            self.undo();
-                        }
-                        if ui.add_enabled(self.can_redo(), egui::Button::new("⟳ Gör om")).on_hover_text("Ctrl+Y").clicked() {
-                            self.redo();
-                        }
-                        ui.separator();
+                        ui.add_space(10.0);
+                        ui.label(egui::RichText::new("/").font(theme::regular(18.0)).color(theme::LINE_STRONG));
+                        ui.add_space(4.0);
                         let kind = match self.model.kind {
                             ModelKind::Cld => "Orsaksdiagram",
                             ModelKind::Sfd => "Flödesmodell",
                         };
-                        ui.label(egui::RichText::new(kind).color(theme::MUTED));
-                        ui.label(egui::RichText::new(&self.model.title).strong());
+                        ui.label(theme::strong(&self.model.title, 16.0));
+                        ui.label(egui::RichText::new(kind).font(theme::regular(14.0)).color(theme::MUTED));
                     }
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        if ui.selectable_label(self.show_help, "❓ Hjälp").clicked() {
+                        ui.spacing_mut().item_spacing.x = 2.0;
+                        let help = if self.show_help { "✕  Stäng hjälpen" } else { "❓  Hjälp" };
+                        if ui_kit::ghost(ui, true, help).clicked() {
                             self.show_help = !self.show_help;
                         }
-                        if let Some((msg, at)) = &self.toast {
-                            let age = ctx.input(|i| i.time) - at;
-                            if age < 4.0 {
-                                ui.label(egui::RichText::new(msg).color(theme::ACCENT));
-                                ctx.request_repaint();
-                            } else {
-                                self.toast = None;
+                        if self.screen == Screen::Editor {
+                            ui.add_space(8.0);
+                            if ui_kit::ghost(ui, true, "💾  Spara").on_hover_text("Spara som fil (Ctrl+S)").clicked() {
+                                self.save_file(ctx);
+                            }
+                            if ui_kit::ghost(ui, true, "📂  Öppna").on_hover_text("Öppna en sparad modell (Ctrl+O)").clicked() {
+                                self.open_file(ctx);
+                            }
+                            ui.add_space(8.0);
+                            if ui_kit::ghost(ui, self.can_redo(), "⟳").on_hover_text("Gör om (Ctrl+Y)").clicked() {
+                                self.redo();
+                            }
+                            if ui_kit::ghost(ui, self.can_undo(), "⟲  Ångra").on_hover_text("Ångra (Ctrl+Z)").clicked() {
+                                self.undo();
                             }
                         }
                     });
                 });
+            });
+    }
+
+    /// Korta meddelanden visas som en mörk bricka nere i mitten och försvinner av sig själva.
+    fn toast(&mut self, ctx: &Context) {
+        let Some((msg, at)) = &self.toast else { return };
+        let age = ctx.input(|i| i.time) - at;
+        if age > 4.0 {
+            self.toast = None;
+            return;
+        }
+        ctx.request_repaint();
+        egui::Area::new(egui::Id::new("toast"))
+            .anchor(egui::Align2::CENTER_BOTTOM, egui::vec2(0.0, -28.0))
+            .order(egui::Order::Tooltip)
+            .interactable(false)
+            .show(ctx, |ui| {
+                egui::Frame::default()
+                    .fill(theme::INK)
+                    .corner_radius(theme::cr(10.0))
+                    .inner_margin(egui::Margin::symmetric(18, 12))
+                    .shadow(egui::Shadow { offset: [0, 6], blur: 20, spread: 0, color: egui::Color32::from_black_alpha(40) })
+                    .show(ui, |ui| {
+                        ui.label(egui::RichText::new(msg).font(theme::semibold(15.0)).color(theme::SURFACE));
+                    });
             });
     }
 }
@@ -415,6 +440,7 @@ impl eframe::App for App {
             }
         }
         help::window(ctx, &mut self.show_help);
+        self.toast(ctx);
 
         if self.playing {
             let end = self.result.times.last().copied().unwrap_or(0.0);

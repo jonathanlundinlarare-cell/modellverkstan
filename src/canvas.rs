@@ -3,6 +3,7 @@
 use crate::app::{App, Drag, Selection, Tool};
 use crate::model::{FeedbackLoop, Link, ModelKind, Node, NodeKind};
 use crate::theme::{self, cr};
+use crate::ui_kit;
 use egui::text::LayoutJob;
 use egui::{
     pos2, vec2, Align, Align2, Color32, CursorIcon, FontId, Galley, Painter, PointerButton, Pos2, Rect, Response,
@@ -49,14 +50,14 @@ fn layout(ui: &Ui, nodes: &[Node], xf: Xf) -> Vec<Geo> {
     nodes
         .iter()
         .map(|n| {
-            let mut job = LayoutJob::simple(n.name.clone(), FontId::proportional(15.0 * z), theme::INK, 170.0 * z);
+            let mut job = LayoutJob::simple(n.name.clone(), theme::semibold(15.0 * z), theme::INK, 170.0 * z);
             job.halign = Align::Center;
             let galley = ui.fonts(|f| f.layout_job(job));
             let t = galley.size();
             let c = xf.screen(n.pos);
             let (rect, hit) = match n.kind {
                 NodeKind::Stock => {
-                    let size = vec2((t.x + 32.0 * z).max(120.0 * z), (t.y + 44.0 * z).max(66.0 * z));
+                    let size = vec2((t.x + 36.0 * z).max(128.0 * z), (t.y + 46.0 * z).max(70.0 * z));
                     let r = Rect::from_center_size(c, size);
                     (r, r)
                 }
@@ -65,12 +66,17 @@ fn layout(ui: &Ui, nodes: &[Node], xf: Xf) -> Vec<Geo> {
                     let label = Rect::from_center_size(c + vec2(0.0, 14.0 * z + t.y / 2.0), t);
                     (r, r.union(label))
                 }
-                NodeKind::Aux | NodeKind::Constant => {
-                    let r = Rect::from_center_size(c, vec2(t.x + 28.0 * z, (t.y + 16.0 * z).max(34.0 * z)));
+                NodeKind::Aux => {
+                    let r = Rect::from_center_size(c, vec2(t.x + 32.0 * z, (t.y + 18.0 * z).max(36.0 * z)));
+                    (r, r)
+                }
+                NodeKind::Constant => {
+                    // Plats för en liten reglage-symbol till vänster om namnet.
+                    let r = Rect::from_center_size(c, vec2(t.x + 50.0 * z, (t.y + 18.0 * z).max(36.0 * z)));
                     (r, r)
                 }
                 NodeKind::Variable => {
-                    let r = Rect::from_center_size(c, t + vec2(22.0, 14.0) * z);
+                    let r = Rect::from_center_size(c, t + vec2(28.0, 18.0) * z);
                     (r, r)
                 }
             };
@@ -215,7 +221,8 @@ fn fit_view(app: &mut App, size: Vec2) {
     for n in &app.model.nodes {
         bb.extend_with(pos2(n.pos[0], n.pos[1]));
     }
-    let bb = bb.expand2(vec2(110.0, 70.0));
+    // Extra luft nertill, där zoomkontrollen och tipsen ligger.
+    let bb = Rect::from_min_max(bb.min - vec2(110.0, 70.0), bb.max + vec2(110.0, 130.0));
     let zoom = (size.x / bb.width()).min(size.y / bb.height()).clamp(0.4, 1.25);
     app.view.zoom = zoom;
     app.view.offset = size / 2.0 - bb.center().to_vec2() * zoom;
@@ -262,6 +269,7 @@ pub fn show(app: &mut App, ui: &mut Ui) {
     draw_grid(&painter, rect, xf);
     draw(app, ui, &painter, &geos, xf, resp.hover_pos());
     draw_hints(app, &painter, rect);
+    overlays(app, ui, rect);
 }
 
 fn draw_grid(painter: &Painter, rect: Rect, xf: Xf) {
@@ -706,38 +714,37 @@ fn draw_node(
 ) {
     let r = g.rect;
     let c = r.center();
-    let small = FontId::proportional(13.0 * z);
+    let small = theme::semibold(13.0 * z);
     let text_top = |h: f32| pos2(c.x, h);
     match n.kind {
         NodeKind::Stock => {
-            painter.rect_filled(r, cr(8.0 * z), theme::STOCK_FILL);
+            let radius = cr(10.0 * z);
+            painter.add(ui_kit::soft_shadow(r, 10.0 * z, 1));
+            painter.rect_filled(r, radius, theme::STOCK_FILL);
             if let Some(f) = level {
                 let h = r.height() * f.clamp(0.0, 1.0);
                 let clip = Rect::from_min_max(pos2(r.left(), r.bottom() - h), r.right_bottom());
-                painter.with_clip_rect(clip).rect_filled(r, cr(8.0 * z), theme::STOCK_LEVEL);
+                painter.with_clip_rect(clip).rect_filled(r, radius, theme::STOCK_LEVEL);
             }
-            painter.rect_stroke(r, cr(8.0 * z), Stroke::new(2.2 * z.max(0.6), theme::STOCK), StrokeKind::Inside);
-            painter.galley(text_top(r.top() + 10.0 * z), g.galley.clone(), theme::INK);
+            painter.rect_stroke(r, radius, Stroke::new(2.2 * z.max(0.6), theme::STOCK), StrokeKind::Inside);
+            painter.galley(text_top(r.top() + 11.0 * z), g.galley.clone(), theme::INK);
             if let Some(v) = value {
                 painter.text(
-                    pos2(c.x, r.bottom() - 9.0 * z),
+                    pos2(c.x, r.bottom() - 10.0 * z),
                     Align2::CENTER_BOTTOM,
                     theme::fmt_with_unit(v, &n.unit),
-                    FontId::proportional(14.0 * z),
-                    theme::STOCK,
+                    theme::bold(14.0 * z),
+                    Color32::from_rgb(28, 74, 160),
                 );
             }
         }
         NodeKind::Flow => {
-            painter.circle(c, 11.0 * z, Color32::WHITE, Stroke::new(2.0 * z.max(0.6), theme::FLOW));
+            painter.add(ui_kit::soft_shadow(Rect::from_center_size(c, Vec2::splat(24.0 * z)), 12.0 * z, 0));
+            painter.circle(c, 12.0 * z, theme::SURFACE, Stroke::new(2.2 * z.max(0.6), theme::FLOW));
             let k = 6.5 * z;
-            painter.add(Shape::convex_polygon(
-                vec![c + vec2(-k, -k), c + vec2(k, -k), c],
-                theme::FLOW,
-                Stroke::NONE,
-            ));
+            painter.add(Shape::convex_polygon(vec![c + vec2(-k, -k), c + vec2(k, -k), c], theme::FLOW, Stroke::NONE));
             painter.add(Shape::convex_polygon(vec![c, c + vec2(k, k), c + vec2(-k, k)], theme::FLOW, Stroke::NONE));
-            let label_top = r.bottom() + 2.0 * z;
+            let label_top = r.bottom() + 3.0 * z;
             painter.galley(text_top(label_top), g.galley.clone(), theme::INK);
             if let Some(v) = value {
                 painter.text(
@@ -745,75 +752,143 @@ fn draw_node(
                     Align2::CENTER_TOP,
                     theme::fmt_with_unit(v, &n.unit),
                     small,
-                    theme::FLOW,
+                    Color32::from_rgb(20, 120, 68),
                 );
             }
         }
         NodeKind::Aux | NodeKind::Constant => {
-            let (fill, stroke, radius) = if n.kind == NodeKind::Aux {
-                (theme::AUX_FILL, theme::AUX, r.height() / 2.0)
+            let is_const = n.kind == NodeKind::Constant;
+            let (fill, stroke, radius, value_color) = if is_const {
+                (theme::CONST_FILL, theme::CONST, 8.0 * z, Color32::from_rgb(170, 84, 10))
             } else {
-                (theme::CONST_FILL, theme::CONST, 6.0 * z)
+                (theme::AUX_FILL, theme::AUX, r.height() / 2.0, theme::AUX)
             };
-            painter.rect(r, cr(radius), fill, Stroke::new(1.6 * z.max(0.6), stroke), StrokeKind::Inside);
-            painter.galley(text_top(c.y - g.galley.size().y / 2.0), g.galley.clone(), theme::INK);
+            painter.add(ui_kit::soft_shadow(r, radius, 0));
+            painter.rect(r, cr(radius), fill, Stroke::new(1.8 * z.max(0.6), stroke), StrokeKind::Inside);
+            let mut text_x = c.x;
+            if is_const {
+                // Liten reglage-symbol: konstanter ändras med reglage.
+                let gx = r.left() + 16.0 * z;
+                painter.line_segment([pos2(gx - 6.0 * z, c.y), pos2(gx + 6.0 * z, c.y)], Stroke::new(2.0 * z, stroke.gamma_multiply(0.5)));
+                painter.circle_filled(pos2(gx + 1.5 * z, c.y), 3.5 * z, stroke);
+                text_x += 9.0 * z;
+            }
+            painter.galley(pos2(text_x, c.y - g.galley.size().y / 2.0), g.galley.clone(), theme::INK);
             if let Some(v) = value {
-                painter.text(
-                    pos2(c.x, r.bottom() + 2.0 * z),
-                    Align2::CENTER_TOP,
-                    theme::fmt_with_unit(v, &n.unit),
-                    small,
-                    stroke,
-                );
+                painter.text(pos2(c.x, r.bottom() + 3.0 * z), Align2::CENTER_TOP, theme::fmt_with_unit(v, &n.unit), small, value_color);
             }
         }
         NodeKind::Variable => {
-            let border = if hovered { theme::MUTED } else { Color32::from_rgb(214, 212, 204) };
-            painter.rect(r, cr(8.0 * z), theme::VAR_FILL, Stroke::new(1.0_f32, border), StrokeKind::Inside);
+            let border = if hovered { theme::INK_2 } else { theme::LINE_STRONG };
+            painter.add(ui_kit::soft_shadow(r, 10.0 * z, 1));
+            painter.rect(r, cr(10.0 * z), theme::SURFACE, Stroke::new(1.2_f32, border), StrokeKind::Inside);
             painter.galley(text_top(c.y - g.galley.size().y / 2.0), g.galley.clone(), theme::INK);
         }
     }
     if hovered && !selected && n.kind != NodeKind::Variable {
-        painter.rect_stroke(g.hit.expand(3.0), cr(8.0 * z), Stroke::new(1.0_f32, theme::MUTED), StrokeKind::Outside);
+        painter.rect_stroke(g.hit.expand(4.0), cr(12.0 * z), Stroke::new(1.0_f32, theme::LINE_STRONG), StrokeKind::Outside);
     }
     if selected {
-        painter.rect_stroke(g.hit.expand(4.0), cr(10.0 * z), Stroke::new(2.5_f32, theme::SELECT), StrokeKind::Outside);
+        painter.rect_stroke(g.hit.expand(5.0), cr(13.0 * z), Stroke::new(2.5_f32, theme::SELECT), StrokeKind::Outside);
     }
     if error {
-        painter.rect_stroke(g.rect.expand(2.0), cr(8.0 * z), Stroke::new(2.0_f32, theme::ERROR), StrokeKind::Outside);
-        let b = g.rect.right_top() + vec2(0.0, 0.0);
-        painter.circle_filled(b, 9.0, theme::ERROR);
-        painter.text(b, Align2::CENTER_CENTER, "!", FontId::proportional(14.0), Color32::WHITE);
+        painter.rect_stroke(g.rect.expand(2.0), cr(10.0 * z), Stroke::new(2.0_f32, theme::ERROR), StrokeKind::Outside);
+        let b = g.rect.right_top();
+        painter.circle(b, 10.0, theme::ERROR, Stroke::new(2.0_f32, theme::SURFACE));
+        painter.text(b, Align2::CENTER_CENTER, "!", theme::bold(14.0), theme::SURFACE);
     }
 }
 
 fn draw_hints(app: &App, painter: &Painter, rect: Rect) {
     let is_cld = app.model.kind == ModelKind::Cld;
     if app.model.nodes.is_empty() {
-        let msg = if is_cld {
-            "Dubbelklicka på ytan för att lägga till en variabel.\nRita sedan pilar med verktyget Pil till vänster."
+        let text = if is_cld {
+            "Dubbelklicka för att lägga till en variabel.\nRita sedan pilar med verktyget Pil."
         } else {
-            "Börja med att välja Lager i verktygslådan till vänster\noch klicka här på ytan."
+            "Välj Lager i verktygsraden till vänster\noch klicka här på ytan."
         };
-        painter.text(rect.center(), Align2::CENTER_CENTER, msg, FontId::proportional(20.0), theme::MUTED);
+        let c = rect.center() - vec2(0.0, 40.0);
+        let icon = c - vec2(0.0, 56.0);
+        painter.rect_filled(Rect::from_center_size(icon, vec2(68.0, 68.0)), cr(18.0), theme::SURFACE_2);
+        ui_kit::kind_glyph(painter, icon, 56.0, is_cld);
+        painter.text(c, Align2::CENTER_CENTER, "Tom yta", theme::bold(22.0), theme::INK);
+        painter.text(c + vec2(0.0, 22.0), Align2::CENTER_TOP, text, theme::regular(16.0), theme::MUTED);
     }
     let hint = match app.tool {
-        // Markera-verktyget behöver ingen ruta som skymmer modellen, utom i en tom modell.
-        Tool::Select if !app.model.nodes.is_empty() => return,
-        Tool::Select if is_cld => {
-            "Dra för att flytta. Dubbelklicka på tom yta för ny variabel, på en pil för att byta + / −."
-        }
-        Tool::Select => "Dra för att flytta saker eller hela ytan. Ctrl + scrollhjul zoomar.",
-        Tool::Place(NodeKind::Stock) => "Klicka på ytan där lagret ska ligga. Ett lager är något som samlas, t.ex. vatten, energi eller värme.",
-        Tool::Place(NodeKind::Constant) => "Klicka på ytan där konstanten ska ligga. Konstanter kan du ändra med reglage.",
-        Tool::Place(NodeKind::Aux) => "Klicka på ytan där hjälpvariabeln ska ligga. Den räknar ut något med en formel.",
+        // Markera-verktyget behöver ingen ruta som skymmer modellen.
+        Tool::Select => return,
+        Tool::Place(NodeKind::Stock) => "Klicka där lagret ska ligga. Ett lager är något som samlas, t.ex. vatten, energi eller värme.",
+        Tool::Place(NodeKind::Constant) => "Klicka där konstanten ska ligga. Den får ett reglage som du kan dra i.",
+        Tool::Place(NodeKind::Aux) => "Klicka där hjälpvariabeln ska ligga. Den räknar ut något med en formel.",
+        Tool::Place(NodeKind::Variable) => "Klicka där variabeln ska ligga.",
         Tool::Place(_) => "Klicka på ytan för att placera.",
-        Tool::Flow => "Dra från ett lager till ett annat. Börjar eller slutar du på tom yta kommer flödet från/till ett moln.",
-        Tool::Link => "Dra från en variabel till en annan för att rita en pil. Klicka på en pil för att byta mellan + och −.",
+        Tool::Flow => "Dra från ett lager till ett annat. Börjar eller slutar du på tom yta kommer flödet från eller går till ett moln.",
+        Tool::Link => "Dra från en variabel till en annan. Klicka på en pil för att byta mellan + och −.",
     };
-    let galley = painter.layout(hint.to_string(), FontId::proportional(14.0), theme::INK, rect.width() - 40.0);
-    let pos = pos2(rect.left() + 14.0, rect.bottom() - 14.0 - galley.size().y);
-    let bg = Rect::from_min_size(pos, galley.size()).expand2(vec2(10.0, 6.0));
-    painter.rect(bg, cr(8.0), Color32::from_white_alpha(235), Stroke::new(1.0_f32, theme::GRID), StrokeKind::Inside);
-    painter.galley(pos, galley, theme::INK);
+    let galley = painter.layout(hint.to_string(), theme::semibold(14.5), theme::SURFACE, (rect.width() - 80.0).min(620.0));
+    let size = galley.size() + vec2(32.0, 20.0);
+    let bg = Rect::from_center_size(pos2(rect.center().x, rect.bottom() - 24.0 - size.y / 2.0), size);
+    painter.add(ui_kit::soft_shadow(bg, 12.0, 2));
+    painter.rect_filled(bg, cr(12.0), theme::INK.gamma_multiply(0.94));
+    painter.galley(bg.min + vec2(16.0, 10.0), galley, theme::SURFACE);
+}
+
+/// Saker som ligger ovanpå ritytan: felband överst och zoomkontroll nere till höger.
+fn overlays(app: &mut App, ui: &mut Ui, rect: Rect) {
+    let errors = app.compiled.errors.len();
+    if errors > 0 {
+        let first = app.compiled.errors.keys().next().copied();
+        let banner = Rect::from_min_size(rect.min + vec2(16.0, 12.0), vec2((rect.width() - 32.0).min(620.0), 40.0));
+        ui.allocate_new_ui(egui::UiBuilder::new().max_rect(banner), |ui| {
+            let resp = egui::Frame::default()
+                .fill(theme::ERROR_SOFT)
+                .stroke(Stroke::new(1.0_f32, theme::ERROR.gamma_multiply(0.5)))
+                .corner_radius(cr(10.0))
+                .inner_margin(egui::Margin::symmetric(14, 9))
+                .show(ui, |ui| {
+                    let text = if errors == 1 {
+                        "⚠  Något i modellen behöver rättas. Klicka här för att se vad.".to_string()
+                    } else {
+                        format!("⚠  {errors} saker i modellen behöver rättas. Klicka här för att se den första.")
+                    };
+                    ui.label(egui::RichText::new(text).font(theme::semibold(14.5)).color(theme::ERROR));
+                })
+                .response
+                .interact(Sense::click())
+                .on_hover_cursor(egui::CursorIcon::PointingHand);
+            if resp.clicked() {
+                if let Some(id) = first {
+                    app.selection = Selection::Node(id);
+                }
+            }
+        });
+    }
+
+    let zoom_rect = Rect::from_min_size(rect.right_bottom() - vec2(266.0, 58.0), vec2(250.0, 42.0));
+    ui.allocate_new_ui(egui::UiBuilder::new().max_rect(zoom_rect).layout(egui::Layout::right_to_left(egui::Align::Center)), |ui| {
+        egui::Frame::default()
+            .fill(theme::SURFACE)
+            .stroke(Stroke::new(1.0_f32, theme::LINE))
+            .corner_radius(cr(10.0))
+            .inner_margin(egui::Margin::same(3))
+            .shadow(egui::Shadow { offset: [0, 2], blur: 8, spread: 0, color: Color32::from_black_alpha(20) })
+            .show(ui, |ui| {
+                ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
+                    ui.spacing_mut().item_spacing.x = 0.0;
+                    if ui_kit::ghost(ui, true, "−").on_hover_text("Zooma ut").clicked() {
+                        zoom_by(app, 1.0 / 1.2, None);
+                    }
+                    let pct = format!("{:.0} %", app.view.zoom * 100.0);
+                    if ui_kit::ghost_colored(ui, true, &pct, theme::INK_2).on_hover_text("Visa i normal storlek").clicked() {
+                        zoom_by(app, 1.0 / app.view.zoom, None);
+                    }
+                    if ui_kit::ghost(ui, true, "+").on_hover_text("Zooma in").clicked() {
+                        zoom_by(app, 1.2, None);
+                    }
+                    if ui_kit::ghost(ui, true, "Anpassa").on_hover_text("Visa hela modellen").clicked() {
+                        request_fit(app);
+                    }
+                });
+            });
+    });
 }

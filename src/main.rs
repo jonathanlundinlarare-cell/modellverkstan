@@ -13,6 +13,7 @@ mod panels;
 mod sim;
 mod start;
 mod theme;
+mod ui_kit;
 
 #[cfg(not(target_arch = "wasm32"))]
 fn main() -> eframe::Result {
