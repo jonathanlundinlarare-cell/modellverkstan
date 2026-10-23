@@ -2,7 +2,7 @@
 
 use crate::model::{FeedbackLoop, Model, ModelKind, NodeKind};
 use crate::sim::{self, Compiled, SimResult};
-use crate::{canvas, examples, export, help, io, lessons, panels, start, theme, ui_kit};
+use crate::{canvas, examples, export, help, io, learn, lessons, panels, start, theme, ui_kit};
 use egui::{Context, Key, KeyboardShortcut, Modifiers, Vec2};
 use std::collections::HashMap;
 
@@ -37,6 +37,8 @@ pub enum Drag {
 pub enum Screen {
     Start,
     Editor,
+    /// Presentationen "Lär dig modellering".
+    Learn,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -93,6 +95,8 @@ pub struct App {
     pub export: Option<(export::ExportAction, f64)>,
     /// Pågående träning (guidad lektion), om någon.
     pub lesson: Option<lessons::LessonState>,
+    /// Vilken bild i presentationen som visas.
+    pub learn_slide: usize,
 
     pub show_help: bool,
     /// Ämnet som visas bland exemplen på startsidan (None = alla).
@@ -138,6 +142,7 @@ impl App {
             plot_rect: egui::Rect::NOTHING,
             export: None,
             lesson: None,
+            learn_slide: 0,
             show_help: false,
             subject_filter: None,
             focus_name: false,
@@ -165,6 +170,13 @@ impl App {
         self.run_counter = 0;
         self.lesson = None;
         self.screen = Screen::Editor;
+    }
+
+    /// Öppnar presentationen "Lär dig modellering" från början.
+    pub fn open_presentation(&mut self) {
+        self.learn_slide = 0;
+        self.show_help = false;
+        self.screen = Screen::Learn;
     }
 
     /// Sparar den nuvarande körningen som jämförelse i grafen.
@@ -349,12 +361,22 @@ impl App {
                         };
                         ui.label(theme::strong(&self.model.title, 16.0));
                         ui.label(egui::RichText::new(kind).font(theme::regular(14.0)).color(theme::MUTED));
+                    } else if self.screen == Screen::Learn {
+                        ui.add_space(10.0);
+                        ui.label(egui::RichText::new("/").font(theme::regular(18.0)).color(theme::LINE_STRONG));
+                        ui.add_space(4.0);
+                        ui.label(theme::strong("Lär dig modellering", 16.0));
                     }
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                         ui.spacing_mut().item_spacing.x = 2.0;
-                        let help = if self.show_help { "✕  Stäng hjälpen" } else { "❓  Hjälp" };
+                        let help = if self.show_help { "×  Stäng hjälpen" } else { "❓  Hjälp" };
                         if ui_kit::ghost(ui, true, help).clicked() {
                             self.show_help = !self.show_help;
+                        }
+                        if self.screen != Screen::Learn
+                            && ui_kit::ghost(ui, true, "🎓  Lär dig").on_hover_text("Presentation om modellering, lager, flöden och loopar").clicked()
+                        {
+                            self.open_presentation();
                         }
                         if self.screen == Screen::Editor {
                             ui.add_space(8.0);
@@ -430,6 +452,7 @@ impl eframe::App for App {
 
         match self.screen {
             Screen::Start => start::show(self, ctx),
+            Screen::Learn => learn::show(self, ctx),
             Screen::Editor => {
                 panels::tool_panel(self, ctx);
                 panels::side_panel(self, ctx);
@@ -439,7 +462,9 @@ impl eframe::App for App {
                 egui::CentralPanel::default().frame(egui::Frame::default()).show(ctx, |ui| canvas::show(self, ui));
             }
         }
-        help::window(ctx, &mut self.show_help);
+        if help::window(ctx, &mut self.show_help) {
+            self.open_presentation();
+        }
         self.toast(ctx);
 
         if self.playing {

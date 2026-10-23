@@ -66,9 +66,9 @@ fn content(app: &mut App, ui: &mut Ui, width: f32) {
     // Träna
     ui.add_space(52.0);
     ui.label(theme::overline("Ny här? Börja här"));
-    ui.label(theme::title("Träna steg för steg", 23.0));
+    ui.label(theme::title("Lär dig steg för steg", 23.0));
     ui.label(
-        RichText::new("Bygg en modell själv med förklaringar och uppgifter. Programmet säger till när du har gjort rätt.")
+        RichText::new("Börja med presentationen och bygg sedan själv i träningarna. Programmet säger till när du har gjort rätt.")
             .font(theme::regular(15.5))
             .color(theme::MUTED),
     );
@@ -179,40 +179,45 @@ fn resume_banner(app: &mut App, ui: &mut Ui, model: Model) {
     }
 }
 
-/// Träningarna som en numrerad väg: steg 1 leder till steg 2.
+/// Vägen för den som är ny: först presentationen, sedan träningarna.
 fn lesson_path(app: &mut App, ui: &mut Ui, width: f32) {
     let all = lessons::all();
-    let n = all.len();
-    let mut chosen = None;
-    let mut circles = Vec::new();
+    let mut items: Vec<(String, String, String, Option<usize>)> = vec![(
+        "Vad är modellering?".into(),
+        format!("Presentation · {} bilder", crate::learn::slides().len()),
+        "Lager, flöden och loopar förklarade med bilder, och exempel på när modeller har slagit fel i verkligheten.".into(),
+        None,
+    )];
     for (i, lesson) in all.iter().enumerate() {
+        let title = lesson.title.trim_start_matches(|ch: char| ch.is_ascii_digit() || ch == '.' || ch == ' ');
+        let kind = if lesson.kind == ModelKind::Cld { "Träning · orsaksdiagram" } else { "Träning · lager och flöden" };
+        items.push((title.to_string(), format!("{kind} · {} steg", lesson.steps.len()), lesson.summary.to_string(), Some(i)));
+    }
+    let n = items.len();
+    let mut chosen: Option<Option<usize>> = None;
+    let mut circles = Vec::new();
+    for (k, (title, kind, summary, target)) in items.iter().enumerate() {
         let left = 64.0;
-        let summary = ui.painter().layout(lesson.summary.to_string(), theme::regular(15.0), theme::MUTED, width - left - 140.0);
+        let summary = ui.painter().layout(summary.clone(), theme::regular(15.0), theme::MUTED, width - left - 140.0);
         let h = 30.0 + 22.0 + summary.size().y + 18.0;
         let (rect, resp) = ui.allocate_exact_size(vec2(width, h), Sense::click());
         hover_surface(ui, rect, &resp, false);
         let painter = ui.painter();
         let c = pos2(rect.left() + 32.0, rect.top() + 32.0);
         circles.push(c);
-        painter.circle_filled(c, 17.0, theme::SUCCESS);
-        painter.text(c, egui::Align2::CENTER_CENTER, format!("{}", i + 1), theme::bold(16.0), theme::SURFACE);
-        let title = lesson.title.trim_start_matches(|ch: char| ch.is_ascii_digit() || ch == '.' || ch == ' ');
+        let color = if target.is_none() { theme::INK } else { theme::SUCCESS };
+        painter.circle_filled(c, 17.0, color);
+        painter.text(c, egui::Align2::CENTER_CENTER, format!("{}", k + 1), theme::bold(16.0), theme::SURFACE);
         painter.text(pos2(rect.left() + left, rect.top() + 16.0), egui::Align2::LEFT_TOP, title, theme::bold(18.0), theme::INK);
-        let kind = if lesson.kind == ModelKind::Cld { "Orsaksdiagram" } else { "Lager och flöden" };
-        painter.text(
-            pos2(rect.left() + left, rect.top() + 40.0),
-            egui::Align2::LEFT_TOP,
-            format!("{kind} · {} steg", lesson.steps.len()),
-            theme::semibold(13.5),
-            theme::SUCCESS,
-        );
+        painter.text(pos2(rect.left() + left, rect.top() + 40.0), egui::Align2::LEFT_TOP, kind, theme::semibold(13.5), color);
         painter.galley(pos2(rect.left() + left, rect.top() + 62.0), summary, theme::MUTED);
-        let go_color = if resp.hovered() { theme::SUCCESS } else { theme::INK_2 };
-        painter.text(rect.right_center() - vec2(20.0, 0.0), egui::Align2::RIGHT_CENTER, "Starta  ›", theme::semibold(15.5), go_color);
+        let go = if target.is_none() { "Visa  ›" } else { "Starta  ›" };
+        let go_color = if resp.hovered() { color } else { theme::INK_2 };
+        painter.text(rect.right_center() - vec2(20.0, 0.0), egui::Align2::RIGHT_CENTER, go, theme::semibold(15.5), go_color);
         if resp.on_hover_cursor(CursorIcon::PointingHand).clicked() {
-            chosen = Some(i);
+            chosen = Some(*target);
         }
-        if i + 1 < n {
+        if k + 1 < n {
             ui.add_space(4.0);
         }
     }
@@ -223,9 +228,13 @@ fn lesson_path(app: &mut App, ui: &mut Ui, width: f32) {
             Stroke::new(2.0_f32, theme::SUCCESS.gamma_multiply(0.35)),
         );
     }
-    if let Some(i) = chosen {
-        app.load_model((all[i].start)());
-        app.lesson = Some(LessonState { lesson: i, step: 0 });
+    match chosen {
+        Some(None) => app.open_presentation(),
+        Some(Some(i)) => {
+            app.load_model((all[i].start)());
+            app.lesson = Some(LessonState { lesson: i, step: 0 });
+        }
+        None => {}
     }
 }
 

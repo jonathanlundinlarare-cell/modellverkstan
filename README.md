@@ -6,6 +6,11 @@ svenska och reglage som ändrar grafen direkt.
 
 ## Vad kan man göra?
 
+- **Lär dig modellering** – en presentation med 16 illustrerade bilder: vad modeller är, orsaksdiagram,
+  lager och flöden, och modellers gränser med verkliga exempel (Riksbankens räntebana 2021–2023 och
+  Pentagons "spagettidiagram" om Afghanistan). Bläddra med piltangenterna; helskärm för projektor.
+- **Träna** – två guidade träningar om kaniner på en ö (orsaksdiagram, sedan lager och flöden).
+
 - **Orsaksdiagram (CLD)** – rita variabler och pilar med + (samma riktning) eller − (motsatt riktning).
   Programmet hittar alla återkopplingsloopar och märker dem **R** (förstärkande) eller **B** (balanserande).
 - **Flödesmodeller** – bygg med *lager* (något som samlas), *flöden* (som fyller på eller tömmer),

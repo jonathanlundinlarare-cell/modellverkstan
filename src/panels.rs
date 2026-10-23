@@ -373,7 +373,7 @@ fn inspector_header(ui: &mut Ui, add_tag: impl FnOnce(&mut Ui)) -> bool {
     ui.horizontal(|ui| {
         add_tag(ui);
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-            close = ui_kit::ghost_colored(ui, true, "✕", theme::MUTED).on_hover_text("Avmarkera (Esc)").clicked();
+            close = ui_kit::ghost_colored(ui, true, "×", theme::MUTED).on_hover_text("Avmarkera (Esc)").clicked();
         });
     });
     close
@@ -986,7 +986,7 @@ fn graph(app: &mut App, ui: &mut Ui) {
                                     .font(theme::regular(14.0))
                                     .color(theme::INK),
                             );
-                            if ui_kit::ghost_colored(ui, true, "✕", theme::MUTED).on_hover_text("Ta bort jämförelsen").clicked() {
+                            if ui_kit::ghost_colored(ui, true, "×", theme::MUTED).on_hover_text("Ta bort jämförelsen").clicked() {
                                 remove = Some(k);
                             }
                         });
