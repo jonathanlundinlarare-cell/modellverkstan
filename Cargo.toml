@@ -17,9 +17,11 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 log = "0.4"
 rfd = "0.15"
+# PNG-export av grafen.
+image = { version = "0.25", default-features = false, features = ["png"] }
 
 [dev-dependencies]
-# Bara för `cargo run --example make_icon`, som ritar ikonen.
+# ICO behövs bara för `cargo run --example make_icon`, som ritar ikonen.
 image = { version = "0.25", default-features = false, features = ["png", "ico"] }
 
 [target.'cfg(windows)'.build-dependencies]

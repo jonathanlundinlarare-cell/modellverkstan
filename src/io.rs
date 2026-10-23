@@ -17,14 +17,15 @@ fn parse(text: &str) -> Result<Model, String> {
     serde_json::from_str(text).map_err(|e| format!("Filen verkar inte vara en modell från Modellverkstan ({e})."))
 }
 
-fn file_name(model: &Model) -> String {
+/// Ett filnamn byggt på modellens titel, t.ex. "Ladda en elbil.mvm".
+pub fn file_name(model: &Model, extension: &str) -> String {
     let base: String = model
         .title
         .chars()
         .map(|c| if c.is_alphanumeric() || c == ' ' || c == '-' { c } else { '_' })
         .collect();
     let base = base.trim();
-    format!("{}.mvm", if base.is_empty() { "modell" } else { base })
+    format!("{}.{extension}", if base.is_empty() { "modell" } else { base })
 }
 
 impl FileIo {
@@ -36,7 +37,7 @@ impl FileIo {
     /// Sparar modellen. `Ok(false)` betyder att användaren avbröt.
     pub fn save(&mut self, model: &Model) -> Result<bool, String> {
         let json = serde_json::to_string_pretty(model).map_err(|e| e.to_string())?;
-        save_text(&file_name(model), &json)
+        save_bytes(&file_name(model, "mvm"), json.as_bytes(), &MODEL_FILE)
     }
 
     pub fn open(&mut self, ctx: &egui::Context) {
@@ -60,26 +61,41 @@ impl FileIo {
     }
 }
 
+/// Vilken sorts fil som sparas: namn i filväljaren, filändelser och MIME-typ.
+// Programmet använder namn och ändelser, webben bara MIME-typen.
+#[allow(dead_code)]
+pub struct FileKind {
+    pub name: &'static str,
+    pub extensions: &'static [&'static str],
+    /// Används bara i webbläsaren, där filen laddas ner.
+    pub mime: &'static str,
+}
+
+const MODEL_FILE: FileKind = FileKind { name: FILTER_NAME, extensions: EXTENSIONS, mime: "application/json" };
+pub const PNG_FILE: FileKind = FileKind { name: "PNG-bild", extensions: &["png"], mime: "image/png" };
+
+/// Sparar en fil: filväljare i programmet, nedladdning i webbläsaren.
+/// `Ok(false)` betyder att användaren avbröt.
 #[cfg(not(target_arch = "wasm32"))]
-fn save_text(name: &str, text: &str) -> Result<bool, String> {
-    let Some(path) = rfd::FileDialog::new().add_filter(FILTER_NAME, EXTENSIONS).set_file_name(name).save_file() else {
+pub fn save_bytes(name: &str, bytes: &[u8], kind: &FileKind) -> Result<bool, String> {
+    let Some(path) = rfd::FileDialog::new().add_filter(kind.name, kind.extensions).set_file_name(name).save_file() else {
         return Ok(false);
     };
-    std::fs::write(&path, text).map_err(|e| format!("Kunde inte spara filen: {e}"))?;
+    std::fs::write(&path, bytes).map_err(|e| format!("Kunde inte spara filen: {e}"))?;
     Ok(true)
 }
 
 #[cfg(target_arch = "wasm32")]
-fn save_text(name: &str, text: &str) -> Result<bool, String> {
-    use eframe::wasm_bindgen::{JsCast, JsValue};
+pub fn save_bytes(name: &str, bytes: &[u8], kind: &FileKind) -> Result<bool, String> {
+    use eframe::wasm_bindgen::JsCast;
     let err = |_| "Kunde inte spara filen i webbläsaren.".to_string();
     let window = web_sys::window().ok_or("Inget webbläsarfönster")?;
     let document = window.document().ok_or("Inget dokument")?;
     let parts = js_sys::Array::new();
-    parts.push(&JsValue::from_str(text));
+    parts.push(&js_sys::Uint8Array::from(bytes));
     let opts = web_sys::BlobPropertyBag::new();
-    opts.set_type("application/json");
-    let blob = web_sys::Blob::new_with_str_sequence_and_options(&parts, &opts).map_err(err)?;
+    opts.set_type(kind.mime);
+    let blob = web_sys::Blob::new_with_u8_array_sequence_and_options(&parts, &opts).map_err(err)?;
     let url = web_sys::Url::create_object_url_with_blob(&blob).map_err(err)?;
     let a: web_sys::HtmlAnchorElement = document.create_element("a").map_err(err)?.dyn_into().map_err(|_| "Fel".to_string())?;
     a.set_href(&url);

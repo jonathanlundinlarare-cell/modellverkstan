@@ -1,14 +1,16 @@
 //! Panelerna runt ritytan: verktygslåda, egenskaper, reglage och resultat.
 
-use crate::app::{App, Drag, ResultTab, Selection, Tool};
+use crate::app::{App, Drag, ResultTab, SavedRun, Selection, Tool};
+use crate::export::{self, ExportAction};
 use crate::canvas;
+use crate::lessons;
 use crate::model::{ModelKind, NodeKind};
 use crate::theme::{self, cr, fmt_num};
 use egui::{
     pos2, vec2, Align2, Color32, Context, FontId, Margin, Painter, Pos2, RichText, Sense, Shape, Stroke, StrokeKind,
     TextEdit, Ui,
 };
-use egui_plot::{Corner, Legend, Line, Plot, PlotPoints, VLine};
+use egui_plot::{Corner, Legend, Line, LineStyle, Plot, PlotPoints, VLine};
 
 // ---------------------------------------------------------------- verktyg
 
@@ -45,8 +47,9 @@ pub fn tool_panel(app: &mut App, ctx: &Context) {
                 ],
             };
             ui.label(RichText::new("Verktyg").small().color(theme::MUTED));
+            let hint = lesson_tool_hint(app);
             for &(tool, label, icon) in tools {
-                if tool_button(ui, app.tool == tool, label, icon).clicked() {
+                if tool_button(ui, app.tool == tool, hint == Some(tool), label, icon).clicked() {
                     app.tool = tool;
                     app.drag = Drag::None;
                 }
@@ -77,7 +80,7 @@ pub fn tool_panel(app: &mut App, ctx: &Context) {
         });
 }
 
-fn tool_button(ui: &mut Ui, selected: bool, label: &str, icon: Icon) -> egui::Response {
+fn tool_button(ui: &mut Ui, selected: bool, hinted: bool, label: &str, icon: Icon) -> egui::Response {
     let (rect, resp) = ui.allocate_exact_size(vec2(96.0, 64.0), Sense::click());
     let painter = ui.painter();
     let (fill, stroke) = if selected {
@@ -88,6 +91,10 @@ fn tool_button(ui: &mut Ui, selected: bool, label: &str, icon: Icon) -> egui::Re
         (Color32::TRANSPARENT, Stroke::NONE)
     };
     painter.rect(rect, cr(8.0), fill, stroke, StrokeKind::Inside);
+    if hinted && !selected {
+        // Träningen pekar ut verktyget som behövs för uppgiften.
+        painter.rect_stroke(rect, cr(8.0), Stroke::new(2.5_f32, theme::SELECT), StrokeKind::Inside);
+    }
     draw_icon(painter, icon, rect.center_top() + vec2(0.0, 23.0));
     painter.text(
         rect.center_bottom() - vec2(0.0, 7.0),
@@ -182,7 +189,11 @@ pub fn side_panel(app: &mut App, ctx: &Context) {
         .frame(egui::Frame::default().fill(theme::PANEL_BG).inner_margin(Margin::same(10)))
         .show(ctx, |ui| {
             egui::ScrollArea::vertical().auto_shrink([false, false]).show(ui, |ui| {
-                about_section(app, ui);
+                if app.lesson.is_some() {
+                    lesson_section(app, ui);
+                } else {
+                    about_section(app, ui);
+                }
                 errors_section(app, ui);
                 section(ui, |ui| selection_section(app, ui));
                 match app.model.kind {
@@ -194,6 +205,134 @@ pub fn side_panel(app: &mut App, ctx: &Context) {
                 }
             });
         });
+}
+
+/// Verktyget som träningens pågående uppgift behöver, om uppgiften inte är klar än.
+fn lesson_tool_hint(app: &App) -> Option<Tool> {
+    let state = app.lesson?;
+    let lessons = lessons::all();
+    let step = lessons.get(state.lesson)?.steps.get(state.step)?;
+    if (step.check)(&app.model, &app.compiled) {
+        None
+    } else {
+        step.tool
+    }
+}
+
+fn lesson_section(app: &mut App, ui: &mut Ui) {
+    let Some(state) = app.lesson else { return };
+    let all = lessons::all();
+    let Some(step) = all.get(state.lesson).and_then(|l| l.steps.get(state.step)) else {
+        app.lesson = None;
+        return;
+    };
+    let lesson = &all[state.lesson];
+    let count = lesson.steps.len();
+    let done = (step.check)(&app.model, &app.compiled);
+    let last = state.step + 1 == count;
+    let mut go_to = None;
+    let mut finish = false;
+    let mut next_lesson = false;
+    let mut solve = false;
+
+    egui::Frame::default()
+        .fill(Color32::from_rgb(232, 244, 236))
+        .stroke(Stroke::new(1.5_f32, theme::FLOW))
+        .corner_radius(cr(10.0))
+        .inner_margin(Margin::same(12))
+        .show(ui, |ui| {
+            ui.set_width(ui.available_width().max(0.0));
+            ui.horizontal(|ui| {
+                ui.label(RichText::new("🎓 Träning").strong().color(theme::FLOW));
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    if ui.small_button("Avsluta").on_hover_text("Avsluta träningen men behåll modellen").clicked() {
+                        finish = true;
+                    }
+                });
+            });
+            ui.label(RichText::new(lesson.title).small().color(theme::MUTED));
+            ui.add(
+                egui::ProgressBar::new((state.step + 1) as f32 / count as f32)
+                    .desired_height(6.0)
+                    .fill(theme::FLOW),
+            );
+            ui.label(RichText::new(format!("Steg {} av {count}", state.step + 1)).small().color(theme::MUTED));
+            ui.add_space(4.0);
+            ui.label(RichText::new(step.title).size(19.0).strong());
+            ui.label(step.text);
+
+            if let Some(task) = step.task {
+                ui.add_space(4.0);
+                let (fill, border) = if done {
+                    (Color32::from_rgb(214, 240, 222), theme::POSITIVE)
+                } else {
+                    (Color32::from_rgb(255, 243, 222), theme::CONST)
+                };
+                egui::Frame::default()
+                    .fill(fill)
+                    .stroke(Stroke::new(1.0_f32, border))
+                    .corner_radius(cr(8.0))
+                    .inner_margin(Margin::same(10))
+                    .show(ui, |ui| {
+                        ui.set_width(ui.available_width().max(0.0));
+                        if done {
+                            ui.label(RichText::new("✔ Klart!").strong().color(theme::POSITIVE));
+                            ui.label(step.done_text);
+                        } else {
+                            ui.label(RichText::new("Din uppgift").strong().color(theme::CONST));
+                            ui.label(task);
+                            ui.add_space(2.0);
+                            if ui.button("💡 Visa hur").on_hover_text("Programmet gör steget åt dig").clicked() {
+                                solve = true;
+                            }
+                        }
+                    });
+            }
+
+            ui.add_space(6.0);
+            ui.horizontal(|ui| {
+                if state.step > 0 && ui.button("◀ Tillbaka").clicked() {
+                    go_to = Some(state.step - 1);
+                }
+                if last {
+                    if state.lesson + 1 < all.len() {
+                        let next = egui::Button::new(RichText::new("Nästa träning ▶").strong()).fill(theme::FLOW_LIGHT);
+                        if ui.add(next).clicked() {
+                            next_lesson = true;
+                        }
+                    }
+                    if ui.button("Klar!").on_hover_text("Avsluta träningen och fortsätt med modellen").clicked() {
+                        finish = true;
+                    }
+                } else {
+                    let next = egui::Button::new(RichText::new("Nästa ▶").strong())
+                        .fill(if done { theme::FLOW_LIGHT } else { Color32::TRANSPARENT });
+                    let resp = ui.add_enabled(done, next);
+                    if !done {
+                        resp.on_disabled_hover_text("Gör uppgiften först – eller tryck på Visa hur.");
+                    } else if resp.clicked() {
+                        go_to = Some(state.step + 1);
+                    }
+                }
+            });
+        });
+
+    if solve {
+        (step.solve)(&mut app.model);
+        app.selection = Selection::None;
+        canvas::request_fit(app);
+    }
+    if let Some(step) = go_to {
+        app.lesson = Some(lessons::LessonState { step, ..state });
+    }
+    if next_lesson {
+        let index = state.lesson + 1;
+        app.load_model((all[index].start)());
+        app.lesson = Some(lessons::LessonState { lesson: index, step: 0 });
+    } else if finish {
+        app.lesson = None;
+        app.notify(ui.ctx(), "Bra jobbat! Modellen finns kvar så att du kan fortsätta experimentera.");
+    }
 }
 
 fn about_section(app: &mut App, ui: &mut Ui) {
@@ -680,7 +819,87 @@ fn series_color(i: usize) -> Color32 {
     theme::SERIES[i % theme::SERIES.len()]
 }
 
+/// Vad som skiljer en sparad körning från modellen nu, t.ex. "Årsränta = 5 %".
+fn run_difference(model: &crate::model::Model, run: &SavedRun) -> String {
+    let diffs: Vec<String> = run
+        .constants
+        .iter()
+        .filter_map(|(id, v)| {
+            let n = model.node(*id)?;
+            ((n.value - v).abs() > 1e-9).then(|| format!("{} = {}", n.name.trim(), theme::fmt_with_unit(*v, &n.unit)))
+        })
+        .collect();
+    if diffs.is_empty() {
+        "samma värden som nu".into()
+    } else {
+        diffs.join(", ")
+    }
+}
+
+/// En liten streckad linje, samma symbol som jämförelserna har i grafen.
+fn dashed_icon(ui: &mut Ui) {
+    let (rect, _) = ui.allocate_exact_size(vec2(22.0, 14.0), Sense::hover());
+    let y = rect.center().y;
+    for k in 0..3 {
+        let x = rect.left() + k as f32 * 8.0;
+        ui.painter().line_segment([pos2(x, y), pos2(x + 5.0, y)], Stroke::new(2.0_f32, theme::MUTED));
+    }
+}
+
 fn graph(app: &mut App, ui: &mut Ui) {
+    let has_result = !app.result.times.is_empty() && app.result.error.is_none();
+    ui.horizontal_wrapped(|ui| {
+        let save = egui::Button::new("📌 Spara som jämförelse");
+        if ui
+            .add_enabled(has_result, save)
+            .on_hover_text("Behåll kurvorna som streckade linjer. Ändra sedan något och jämför!")
+            .clicked()
+        {
+            app.save_run();
+        }
+        ui.separator();
+        if ui.add_enabled(has_result, egui::Button::new("🖼 Spara bild")).on_hover_text("Spara grafen som PNG-bild").clicked() {
+            export::request(app, ui.ctx(), ExportAction::Save);
+        }
+        if ui
+            .add_enabled(has_result, egui::Button::new("📋 Kopiera bild"))
+            .on_hover_text("Kopiera grafen och klistra in den i t.ex. Word eller Google Docs")
+            .clicked()
+        {
+            export::request(app, ui.ctx(), ExportAction::Copy);
+        }
+    });
+    if !app.saved_runs.is_empty() {
+        let mut remove = None;
+        ui.horizontal_wrapped(|ui| {
+            ui.label(RichText::new("Jämför med:").color(theme::MUTED));
+            for (k, run) in app.saved_runs.iter().enumerate() {
+                egui::Frame::default()
+                    .fill(Color32::from_rgb(243, 242, 237))
+                    .corner_radius(cr(6.0))
+                    .inner_margin(Margin::symmetric(6, 2))
+                    .show(ui, |ui| {
+                        ui.horizontal(|ui| {
+                            dashed_icon(ui);
+                            ui.label(format!("Körning {}: {}", run.number, run_difference(&app.model, run)));
+                            if ui.small_button("✕").on_hover_text("Ta bort jämförelsen").clicked() {
+                                remove = Some(k);
+                            }
+                        });
+                    });
+            }
+            if app.saved_runs.len() > 1 && ui.small_button("Rensa alla").clicked() {
+                remove = Some(usize::MAX);
+            }
+        });
+        match remove {
+            Some(usize::MAX) => app.saved_runs.clear(),
+            Some(k) => {
+                app.saved_runs.remove(k);
+            }
+            None => {}
+        }
+    }
     ui.horizontal_wrapped(|ui| {
         ui.label(RichText::new("Visa:").color(theme::MUTED));
         for (i, n) in app.model.nodes.iter_mut().enumerate() {
@@ -699,7 +918,14 @@ fn graph(app: &mut App, ui: &mut Ui) {
     let unit = app.model.time_unit.clone();
     let t_now = app.shown_time();
     let show_line = app.scrub.is_some() || app.playing;
-    let clicked = Plot::new("graf")
+    let label = |n: &crate::model::Node| {
+        if n.unit.trim().is_empty() {
+            n.name.trim().to_string()
+        } else {
+            format!("{} ({})", n.name.trim(), n.unit.trim())
+        }
+    };
+    let plot = Plot::new("graf")
         .legend(Legend::default().position(Corner::LeftTop))
         .x_axis_label(format!("Tid ({unit})"))
         .x_axis_formatter(|m, _| fmt_num(m.value))
@@ -710,11 +936,25 @@ fn graph(app: &mut App, ui: &mut Ui) {
         })
         .allow_scroll(false)
         .show(ui, |pu| {
+            // Sparade körningar först, så att den nuvarande hamnar överst.
+            for (k, run) in app.saved_runs.iter().enumerate() {
+                let fade = 0.85 - 0.12 * k as f32;
+                for (i, n) in &shown {
+                    let Some(s) = run.series.get(&n.id) else { continue };
+                    let pts: Vec<[f64; 2]> = run.times.iter().zip(s).map(|(t, v)| [*t, *v]).collect();
+                    pu.line(
+                        Line::new(PlotPoints::new(pts))
+                            .name(format!("{} – körning {}", label(n), run.number))
+                            .color(series_color(*i).gamma_multiply(fade))
+                            .style(LineStyle::Dashed { length: (12.0 - 3.0 * k as f32).max(4.0) })
+                            .width(2.0_f32),
+                    );
+                }
+            }
             for (i, n) in &shown {
                 let Some(s) = app.result.series.get(&n.id) else { continue };
                 let pts: Vec<[f64; 2]> = app.result.times.iter().zip(s).map(|(t, v)| [*t, *v]).collect();
-                let name = if n.unit.trim().is_empty() { n.name.trim().to_string() } else { format!("{} ({})", n.name.trim(), n.unit.trim()) };
-                pu.line(Line::new(PlotPoints::new(pts)).name(name).color(series_color(*i)).width(2.5_f32));
+                pu.line(Line::new(PlotPoints::new(pts)).name(label(n)).color(series_color(*i)).width(2.5_f32));
             }
             if show_line {
                 pu.vline(VLine::new(t_now).color(theme::MUTED).width(1.5_f32));
@@ -724,9 +964,9 @@ fn graph(app: &mut App, ui: &mut Ui) {
             } else {
                 None
             }
-        })
-        .inner;
-    if let Some(t) = clicked {
+        });
+    app.plot_rect = plot.response.rect;
+    if let Some(t) = plot.inner {
         let end = app.result.times.last().copied().unwrap_or(0.0);
         app.scrub = Some(t.clamp(0.0, end));
         app.playing = false;

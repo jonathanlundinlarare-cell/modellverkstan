@@ -3,9 +3,11 @@
 mod app;
 mod canvas;
 mod examples;
+mod export;
 mod expr;
 mod help;
 mod io;
+mod lessons;
 mod model;
 mod panels;
 mod sim;

@@ -2,6 +2,7 @@
 
 use crate::app::App;
 use crate::examples::{self, Subject};
+use crate::lessons;
 use crate::model::{Model, ModelKind};
 use crate::theme::{self, cr};
 use egui::{Color32, Context, Margin, RichText, Sense, Stroke, StrokeKind, Ui};
@@ -36,6 +37,8 @@ struct Card {
     title: String,
     body: String,
     model: Model,
+    /// Träningen som startar när kortet klickas, om det är ett träningskort.
+    lesson: Option<usize>,
 }
 
 fn card_grid(app: &mut App, ui: &mut Ui, width: f32, cols: usize, cards: Vec<Card>) {
@@ -48,6 +51,7 @@ fn card_grid(app: &mut App, ui: &mut Ui, width: f32, cols: usize, cards: Vec<Car
             for c in cards.by_ref().take(cols) {
                 if card(ui, card_w, c.badge, &c.title, &c.body).clicked() {
                     app.load_model(c.model);
+                    app.lesson = c.lesson.map(|lesson| lessons::LessonState { lesson, step: 0 });
                 }
             }
         });
@@ -116,12 +120,14 @@ fn content(app: &mut App, ui: &mut Ui, width: f32) {
             title: "Nytt orsaksdiagram".into(),
             body: "Visa hur saker påverkar varandra med pilar och + / −. Programmet hittar looparna åt dig.".into(),
             model: Model::new(ModelKind::Cld),
+            lesson: None,
         },
         Card {
             badge: badge(ModelKind::Sfd),
             title: "Ny flödesmodell".into(),
             body: "Bygg med lager, flöden och konstanter. Modellen räknas ut direkt och visas i en graf.".into(),
             model: Model::new(ModelKind::Sfd),
+            lesson: None,
         },
     ];
     if let Some(m) = &app.resume {
@@ -130,9 +136,28 @@ fn content(app: &mut App, ui: &mut Ui, width: f32) {
             title: m.title.clone(),
             body: "Öppna modellen du arbetade med senast.".into(),
             model: m.clone(),
+            lesson: None,
         });
     }
     card_grid(app, ui, width, cols, new_cards);
+
+    ui.add_space(20.0);
+    ui.label(RichText::new("Träna – lär dig steg för steg").size(20.0).strong());
+    ui.label(
+        RichText::new("Bygg en modell själv med förklaringar och uppgifter. Börja här om du är ny!").color(theme::MUTED),
+    );
+    let lesson_cards = lessons::all()
+        .into_iter()
+        .enumerate()
+        .map(|(i, l)| Card {
+            badge: (if l.kind == ModelKind::Cld { "TRÄNING · ORSAKSDIAGRAM" } else { "TRÄNING · FLÖDESMODELL" }, theme::FLOW),
+            title: l.title.into(),
+            body: l.summary.into(),
+            model: (l.start)(),
+            lesson: Some(i),
+        })
+        .collect();
+    card_grid(app, ui, width, cols, lesson_cards);
 
     ui.add_space(20.0);
     ui.label(RichText::new("Exempel att utforska").size(20.0).strong());
@@ -149,7 +174,7 @@ fn content(app: &mut App, ui: &mut Ui, width: f32) {
     let examples = examples::all()
         .into_iter()
         .filter(|ex| app.subject_filter.is_none_or(|s| s == ex.subject))
-        .map(|ex| Card { badge: badge(ex.kind), title: ex.title.into(), body: ex.summary.into(), model: (ex.build)() })
+        .map(|ex| Card { badge: badge(ex.kind), title: ex.title.into(), body: ex.summary.into(), model: (ex.build)(), lesson: None })
         .collect();
     card_grid(app, ui, width, cols, examples);
 

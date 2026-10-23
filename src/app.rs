@@ -2,8 +2,9 @@
 
 use crate::model::{FeedbackLoop, Model, ModelKind, NodeKind};
 use crate::sim::{self, Compiled, SimResult};
-use crate::{canvas, examples, help, io, panels, start, theme};
+use crate::{canvas, examples, export, help, io, lessons, panels, start, theme};
 use egui::{Context, Key, KeyboardShortcut, Modifiers, Vec2};
+use std::collections::HashMap;
 
 const STORAGE_KEY: &str = "senaste_modell";
 
@@ -49,6 +50,18 @@ pub struct View {
     pub zoom: f32,
 }
 
+/// En sparad körning som visas som streckad linje i grafen, för att jämföra med.
+pub struct SavedRun {
+    pub number: usize,
+    pub times: Vec<f64>,
+    pub series: HashMap<u32, Vec<f64>>,
+    /// Konstanternas värden när körningen sparades (id, värde).
+    pub constants: Vec<(u32, f64)>,
+}
+
+/// Högst så här många jämförelser åt gången, annars blir grafen oläslig.
+const MAX_SAVED_RUNS: usize = 4;
+
 pub struct App {
     pub screen: Screen,
     pub model: Model,
@@ -73,6 +86,13 @@ pub struct App {
     pub playing: bool,
     pub result_tab: ResultTab,
     pub highlight_loop: Option<usize>,
+    pub saved_runs: Vec<SavedRun>,
+    run_counter: usize,
+    /// Var grafen ritades senast (för att kunna spara den som bild).
+    pub plot_rect: egui::Rect,
+    pub export: Option<(export::ExportAction, f64)>,
+    /// Pågående träning (guidad lektion), om någon.
+    pub lesson: Option<lessons::LessonState>,
 
     pub show_help: bool,
     /// Ämnet som visas bland exemplen på startsidan (None = alla).
@@ -113,6 +133,11 @@ impl App {
             playing: false,
             result_tab: ResultTab::Graph,
             highlight_loop: None,
+            saved_runs: Vec::new(),
+            run_counter: 0,
+            plot_rect: egui::Rect::NOTHING,
+            export: None,
+            lesson: None,
             show_help: false,
             subject_filter: None,
             focus_name: false,
@@ -136,7 +161,34 @@ impl App {
         self.fit_pending = true;
         self.highlight_loop = None;
         self.rename_origin = None;
+        self.saved_runs.clear();
+        self.run_counter = 0;
+        self.lesson = None;
         self.screen = Screen::Editor;
+    }
+
+    /// Sparar den nuvarande körningen som jämförelse i grafen.
+    pub fn save_run(&mut self) {
+        if self.result.times.is_empty() {
+            return;
+        }
+        self.run_counter += 1;
+        let constants = self
+            .model
+            .nodes
+            .iter()
+            .filter(|n| n.kind == NodeKind::Constant)
+            .map(|n| (n.id, n.value))
+            .collect();
+        self.saved_runs.push(SavedRun {
+            number: self.run_counter,
+            times: self.result.times.clone(),
+            series: self.result.series.clone(),
+            constants,
+        });
+        if self.saved_runs.len() > MAX_SAVED_RUNS {
+            self.saved_runs.remove(0);
+        }
     }
 
     pub fn notify(&mut self, ctx: &Context, msg: impl Into<String>) {
@@ -337,6 +389,7 @@ impl eframe::App for App {
                 Err(e) => self.notify(ctx, e),
             }
         }
+        export::poll(self, ctx);
         // När namnrutan lämnas uppdateras formler som använde det gamla namnet.
         if !ctx.wants_keyboard_input() {
             if let Some((id, old)) = self.rename_origin.take() {
